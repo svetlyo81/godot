@@ -1,0 +1,12 @@
+#!/usr/bin/env python
+
+Import("env")
+Import("env_modules")
+
+env_gdllama = env_modules.Clone()
+
+env_gdllama.add_source_files(env.modules_sources, "*.cpp")
+env_gdllama.add_source_files(env.modules_sources, "*.c")
+
+if env.msvc:
+    env_gdllama.add_source_files(env.modules_sources, "llama-win/*.cpp")

@@ -786,6 +786,10 @@ elif env.msvc:
 
 # Configure compiler warnings
 if env.msvc:  # MSVC
+    env.Append(LINKFLAGS=["modules/gdllama/llama-win/ggml.lib",
+                          "modules/gdllama/llama-win/llama.lib",
+                          "modules/gdllama/diffusion-win/stable-diffusion.lib"])
+    
     if env["warnings"] == "no":
         env.Append(CCFLAGS=["/w"])
     else:
@@ -817,6 +821,15 @@ if env.msvc:  # MSVC
         env.Append(CCFLAGS=["/WX"])
         env.Append(LINKFLAGS=["/WX"])
 else:  # GCC, Clang
+    # env.Append(LINKFLAGS=['-framework', 'OpenCL'])
+    # env.Append(LINKFLAGS=["modules/gdllama/llama/libclblast.a"])
+
+    env.Append(LIBPATH=["#/modules/gdllama/llama-win"])
+    env.Append(LIBS=["common","ggml.dll","llama.dll"])
+
+    env.Append(LIBPATH=["#/modules/gdllama/diffusion-win"])
+    env.Append(LIBS=["stable-diffusion.dll"])
+    
     common_warnings = []
 
     if methods.using_gcc(env):

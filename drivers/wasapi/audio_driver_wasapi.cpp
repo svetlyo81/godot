@@ -87,7 +87,7 @@ __CRT_UUID_DECL(IAudioClient3, 0x7ED4EE07, 0x8E67, 0x4CD4, 0x8C, 0x1A, 0x2B, 0x7
 
 #endif // __IAudioClient3_INTERFACE_DEFINED__
 
-#endif // __MINGW32__ || __MINGW64__
+#else
 
 #ifndef PKEY_Device_FriendlyName
 
@@ -99,6 +99,8 @@ __CRT_UUID_DECL(IAudioClient3, 0x7ED4EE07, 0x8E67, 0x4CD4, 0x8C, 0x1A, 0x2B, 0x7
 
 DEFINE_PROPERTYKEY(PKEY_Device_FriendlyName, 0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0, 14);
 #endif
+
+#endif // __MINGW32__ || __MINGW64__
 
 const CLSID CLSID_MMDeviceEnumerator = __uuidof(MMDeviceEnumerator);
 const IID IID_IMMDeviceEnumerator = __uuidof(IMMDeviceEnumerator);
