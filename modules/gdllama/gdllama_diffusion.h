@@ -29,6 +29,7 @@ public:
 	void set_control_path(const String &controlPath);
 	void set_param(const String &paramName_, float paramValue);
 	void set_prompt(const String &promptString);
+	void set_negative_prompt(const String &promptString);
 	void set_image(const PackedByteArray &promptImage);
 	void set_control_image(const PackedByteArray &promptImage);
 	void set_mask_image(const PackedByteArray &maskImage);

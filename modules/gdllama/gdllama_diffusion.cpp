@@ -170,6 +170,7 @@ void Diffusion::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_control_path", "value"), &Diffusion::set_control_path, DEFVAL(""));
 	ClassDB::bind_method(D_METHOD("set_param", "value", "value"), &Diffusion::set_param, DEFVAL(""), DEFVAL(1.0f));
 	ClassDB::bind_method(D_METHOD("set_prompt", "value"), &Diffusion::set_prompt, DEFVAL(""));
+	ClassDB::bind_method(D_METHOD("set_negative_prompt", "value"), &Diffusion::set_negative_prompt, DEFVAL(""));
 	ClassDB::bind_method(D_METHOD("set_image", "value"), &Diffusion::set_image, DEFVAL(NULL));
 	ClassDB::bind_method(D_METHOD("set_control_image", "value"), &Diffusion::set_control_image, DEFVAL(NULL));
 	ClassDB::bind_method(D_METHOD("set_mask_image", "value"), &Diffusion::set_mask_image, DEFVAL(NULL));
@@ -220,6 +221,9 @@ void Diffusion::set_param(const String &paramName_, const float paramValue) {
 }
 void Diffusion::set_prompt(const String &promptString) {
 	params.prompt = std::string(promptString.utf8().get_data());
+}
+void Diffusion::set_negative_prompt(const String &promptString) {
+	params.negative_prompt = std::string(promptString.utf8().get_data());
 }
 void Diffusion::set_image(const PackedByteArray &promptImage) {
 	outputData.clear();
