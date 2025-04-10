@@ -17,7 +17,7 @@ private:
 	bool didSetSystemPrompt = false;
 
 	bool shouldUseGPU = true;
-	int gpuFreeMem = 8000;
+	int gpuFreeMem = 6000;
 	int gpuLayerMem = 245; //gemma9b:200
 
 	std::string buffer = "";

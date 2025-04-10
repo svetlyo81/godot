@@ -54,6 +54,7 @@ struct SDParams {
 	float min_cfg = 1.0f;
 	float cfg_scale = 7.0f;
 	float guidance = 3.5f;
+	float eta = 0.f;
 	float style_ratio = 20.f;
 	int clip_skip = -1; // <= 0 represents unspecified
 	int width = 512;
@@ -84,9 +85,9 @@ struct SDParams {
 	int upscale_repeats = 1;
 
 	std::vector<int> skip_layers = { 7, 8, 9 };
-	float slg_scale = 0.;
-	float skip_layer_start = 0.01;
-	float skip_layer_end = 0.2;
+	float slg_scale = 0.f;
+	float skip_layer_start = 0.01f;
+	float skip_layer_end = 0.2f;
 };
 
 /* Enables Printing the log level tag in color using ANSI escape codes */
@@ -152,12 +153,6 @@ Diffusion::Diffusion() {
 	params.seed = -1;
 	params.mask_path = "";
 
-	#if !defined(_MSC_VER)
-
-	params.vae_tiling = true;
-
-	#endif
-
 	sd_set_log_callback(sd_log_cb, (void *)&params);
 }
 Diffusion::~Diffusion() {
@@ -195,28 +190,17 @@ void Diffusion::set_param(const String &paramName_, const float paramValue) {
 	else if (paramName == "control_strength") params.control_strength = paramValue;
 	else if (paramName == "width") params.width = (int)paramValue;
 	else if (paramName == "height") params.height = (int)paramValue;
-	else if (paramName == "cfg_scale") params.cfg_scale = (int)paramValue;
+	else if (paramName == "cfg_scale") params.cfg_scale = paramValue;
+	else if (paramName == "guidance") params.guidance = paramValue;
 	else if (paramName == "sample_steps") params.sample_steps = (int)paramValue;
 	else if (paramName == "sample_method") params.sample_method = (sample_method_t)paramValue;
 	else if (paramName == "enable_taesd") {
-		if (paramValue == 1.0f) {
-			params.taesd_path = "taesd.safetensors";
-		} else {
-			params.taesd_path = "";
-		}
+		if (paramValue == 1.0f) params.taesd_path = "taesd.safetensors";
+		else params.taesd_path = "";
 	}
 	else if (paramName == "enable_vae_tiling") {
-		#if !defined(_MSC_VER)
-
-		if (paramValue == 1.0f) {
-			params.vae_tiling = true;
-			params.vae_on_cpu = false;
-		} else {
-			params.vae_tiling = false;
-			params.vae_on_cpu = true;
-		}
-
-		#endif
+		if (paramValue == 1.0f) params.vae_tiling = true;
+		else params.vae_tiling = false;
 	}
 }
 void Diffusion::set_prompt(const String &promptString) {
@@ -424,6 +408,7 @@ PackedByteArray Diffusion::start() {
 				params.clip_skip,
 				params.cfg_scale,
 				params.guidance,
+				params.eta,
 				params.width,
 				params.height,
 				params.sample_method,
@@ -475,6 +460,7 @@ PackedByteArray Diffusion::start() {
 				params.clip_skip,
 				params.cfg_scale,
 				params.guidance,
+				params.eta,
 				params.width,
 				params.height,
 				params.sample_method,

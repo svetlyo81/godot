@@ -268,17 +268,17 @@ void Llama::initialize() {
 	#if !defined(_MSC_VER)
 
 	if (shouldUseGPU) {
-		ggml_backend_vk_init(params.main_gpu);
-
-		int deviceType = ggml_backend_vk_get_device_type(params.main_gpu);
+		ggml_backend_vk_init(0);
+		int deviceIndex = ggml_backend_vk_get_device_index();
+		int deviceType = ggml_backend_vk_get_device_type(deviceIndex);
 		if (deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
 			size_t gpu_total_mem;
 			size_t gpu_free_mem;
-			ggml_backend_vk_get_device_memory(params.main_gpu, &gpu_free_mem, &gpu_total_mem);
+			ggml_backend_vk_get_device_memory(deviceIndex, &gpu_free_mem, &gpu_total_mem);
 
 			int32_t gpu_layer_mem = (int32_t)gpuLayerMem;
 			int32_t gpu_total_mem_int = (int32_t)(gpu_total_mem / (1024 * 1024));
-			if (gpu_total_mem_int > 7900) {
+			if (gpu_total_mem_int > (int32_t)gpuFreeMem - 100) {
 				gpu_total_mem_int -= (int32_t)gpuFreeMem;
 				if (gpu_total_mem_int > 900) {
 					params.n_gpu_layers = gpu_total_mem_int / gpu_layer_mem;
@@ -301,7 +301,7 @@ void Llama::initialize() {
 
 		int32_t gpu_layer_mem = (int32_t)gpuLayerMem;
 		int32_t gpu_total_mem_int = (int32_t)(gpu_total_mem / (1024 * 1024));
-		if (gpu_total_mem_int > 7900) {
+		if (gpu_total_mem_int > (int32_t)gpuFreeMem - 100) {
 			gpu_total_mem_int -= (int32_t)gpuFreeMem;
 			if (gpu_total_mem_int > 900) {
 				params.n_gpu_layers = gpu_total_mem_int / gpu_layer_mem;
@@ -318,7 +318,6 @@ void Llama::initialize() {
 	// load the model and apply lora adapter, if any
 
 	llama_init_result llama_init = llama_init_from_gpt_params(params);
-
 	model = llama_init.model;
 
 	if (model == NULL && params.n_gpu_layers != -1) {
@@ -336,9 +335,10 @@ void Llama::initialize() {
 	if (ctx == NULL) {
 		fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
 		llama_free_model(model);
-		return;
-	} else
+	} else {
 		llama_free(ctx);
+		ctx = NULL;
+	}
 
 	llama_backend_free();
 }
@@ -1173,7 +1173,10 @@ void Llama::start() {
 	llama_reset_timings(ctx);
 
 	//if (ctx_guidance) llama_free(ctx_guidance);
-	if(ctx) llama_free(ctx);
+	if (ctx) {
+		llama_free(ctx);
+		ctx = NULL;
+	}
 
 	llama_sampling_free(ctx_sampling);
 	llama_backend_free();
