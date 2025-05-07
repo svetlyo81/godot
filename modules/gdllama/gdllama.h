@@ -18,6 +18,7 @@ private:
 
 	bool shouldUseGPU = true;
 	int gpuFreeMem = 6000;
+	int gpuTotalMem = 0;
 	int gpuLayerMem = 245; //gemma9b:200
 
 	std::string buffer = "";
@@ -40,7 +41,7 @@ public:
 
 	bool is_running();
 	void set_should_use_gpu(bool _shouldUseGPU);
-	void set_gpu_free_mem(int _gpuFreeMem);
+	bool set_gpu_free_mem(int _gpuFreeMem);
 	void set_gpu_layer_mem(int _gpuLayerMem);
 	void set_path(const String &modelPath);
 	void set_session_path(const String &sessionPath);

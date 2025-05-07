@@ -19,6 +19,7 @@ private:
 	int maskImageChannels = 0;
 	int maskImageWidth = 0;
 	int maskImageHeight = 0;
+	int allocFailCount = 0;
 
 protected:
 	static void _bind_methods();
@@ -33,6 +34,7 @@ public:
 	void set_image(const PackedByteArray &promptImage);
 	void set_control_image(const PackedByteArray &promptImage);
 	void set_mask_image(const PackedByteArray &maskImage);
+	int get_alloc_fail_count();
 	PackedByteArray start();
 	void freeInputBuffers();
 	void freeModel();

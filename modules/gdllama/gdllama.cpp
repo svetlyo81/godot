@@ -118,8 +118,8 @@ Llama::Llama() {
 
 	//params.use_mmap = false;
 
-	//params.sparams.temp = 1.25f;
-	//params.sparams.temp = 0.01f;
+	params.sparams.temp = 0.35f;
+	//params.sparams.temp = 0.1f;
 	params.sparams.top_k = 0;
 	params.sparams.top_p = 1.0f;
 	params.sparams.min_p = 0.05;
@@ -139,7 +139,7 @@ Llama::~Llama() {
 void Llama::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_running"), &Llama::is_running);
 	ClassDB::bind_method(D_METHOD("set_should_use_gpu", "value"), &Llama::set_should_use_gpu, DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("set_gpu_free_mem", "value"), &Llama::set_gpu_free_mem, DEFVAL(3000));
+	ClassDB::bind_method(D_METHOD("set_gpu_free_mem", "value"), &Llama::set_gpu_free_mem, DEFVAL(6000));
 	ClassDB::bind_method(D_METHOD("set_gpu_layer_mem", "value"), &Llama::set_gpu_layer_mem, DEFVAL(200));
 	ClassDB::bind_method(D_METHOD("set_path", "value"), &Llama::set_path, DEFVAL(""));
 	ClassDB::bind_method(D_METHOD("set_session_path", "value"), &Llama::set_session_path, DEFVAL(""));
@@ -165,10 +165,15 @@ bool Llama::is_running() {
 	return isRunning;
 }
 void Llama::set_should_use_gpu(bool _shouldUseGPU) {
+	params.n_gpu_layers = -1;
 	shouldUseGPU = _shouldUseGPU;
 }
-void Llama::set_gpu_free_mem(int _gpuFreeMem) {
+bool Llama::set_gpu_free_mem(int _gpuFreeMem) {
 	gpuFreeMem = _gpuFreeMem;
+
+	if (gpuTotalMem > _gpuFreeMem - 100) {
+		return true;
+	} else return false;
 }
 void Llama::set_gpu_layer_mem(int _gpuLayerMem) {
 	gpuLayerMem = _gpuLayerMem;
@@ -278,6 +283,7 @@ void Llama::initialize() {
 
 			int32_t gpu_layer_mem = (int32_t)gpuLayerMem;
 			int32_t gpu_total_mem_int = (int32_t)(gpu_total_mem / (1024 * 1024));
+			gpuTotalMem = (int)gpu_total_mem_int;
 			if (gpu_total_mem_int > (int32_t)gpuFreeMem - 100) {
 				gpu_total_mem_int -= (int32_t)gpuFreeMem;
 				if (gpu_total_mem_int > 900) {
@@ -301,6 +307,7 @@ void Llama::initialize() {
 
 		int32_t gpu_layer_mem = (int32_t)gpuLayerMem;
 		int32_t gpu_total_mem_int = (int32_t)(gpu_total_mem / (1024 * 1024));
+		gpuTotalMem = (int)gpu_total_mem_int;
 		if (gpu_total_mem_int > (int32_t)gpuFreeMem - 100) {
 			gpu_total_mem_int -= (int32_t)gpuFreeMem;
 			if (gpu_total_mem_int > 900) {
@@ -1196,5 +1203,6 @@ void Llama::start() {
 void Llama::freeModel() {
 	if (!isRunning && model != NULL) {
 		llama_free_model(model);
+		model = NULL;
 	}
 }

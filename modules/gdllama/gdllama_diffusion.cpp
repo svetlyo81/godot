@@ -169,6 +169,7 @@ void Diffusion::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_image", "value"), &Diffusion::set_image, DEFVAL(NULL));
 	ClassDB::bind_method(D_METHOD("set_control_image", "value"), &Diffusion::set_control_image, DEFVAL(NULL));
 	ClassDB::bind_method(D_METHOD("set_mask_image", "value"), &Diffusion::set_mask_image, DEFVAL(NULL));
+	ClassDB::bind_method(D_METHOD("get_alloc_fail_count"), &Diffusion::get_alloc_fail_count);
 	ClassDB::bind_method(D_METHOD("start"), &Diffusion::start);
 	ClassDB::bind_method(D_METHOD("freeModel"), &Diffusion::freeModel);
 }
@@ -243,6 +244,9 @@ void Diffusion::set_mask_image(const PackedByteArray &maskImage) {
 
 	mask_image_buffer = stbi_load_from_memory(imageData, maskImage.size(), &maskImageWidth, &maskImageHeight, &maskImageChannels, 1);
 	delete[] imageData;
+}
+int Diffusion::get_alloc_fail_count() {
+	return allocFailCount;
 }
 
 PackedByteArray Diffusion::start() {
@@ -503,6 +507,17 @@ PackedByteArray Diffusion::start() {
 	}*/
 	
 	if (results[0].data != NULL) {
+		uint8_t *resultsData = results[0].data;
+		size_t resultsCount = results[0].channel * results[0].width * results[0].height;
+		for (size_t i = 0; i < resultsCount; i++) {
+			if (resultsData[i] != 127) {
+				resultsData = NULL;
+				break;
+			}
+		}
+		if (resultsData == NULL) allocFailCount = 0;
+		else allocFailCount++;
+		
 		int len;
 		unsigned char *pngArray = stbi_write_png_to_mem((const unsigned char *)results[0].data, 0, results[0].width, results[0].height, results[0].channel, &len, "");
 		
