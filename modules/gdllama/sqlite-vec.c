@@ -1,4 +1,9 @@
 
+/* Copyright (c) 2024 Alex Garcia
+
+   https://github.com/asg017/sqlite-vec/blob/main/LICENSE-MIT
+   https://github.com/asg017/sqlite-vec/blob/main/LICENSE-APACHE */
+
 #include "sqlite-vec.h"
 
 #include <assert.h>

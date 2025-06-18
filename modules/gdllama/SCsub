@@ -5,6 +5,23 @@ Import("env_modules")
 
 env_gdllama = env_modules.Clone()
 
+if env.msvc:
+    env_gdllama.Append(CPPDEFINES=["GGML_USE_CUDA"])
+    env_gdllama.Append(CPPDEFINES=["GGML_CUDA_USE_GRAPHS"])
+    env_gdllama.Append(CPPDEFINES=[("GGML_CUDA_DMMV_X", 32)])
+    env_gdllama.Append(CPPDEFINES=[("GGML_CUDA_MMV_Y", 1)])
+    env_gdllama.Append(CPPDEFINES=[("K_QUANTS_PER_ITERATION", 2)])
+    env_gdllama.Append(CPPDEFINES=[("GGML_CUDA_PEER_MAX_BATCH_SIZE", 128)])
+else:
+    env_gdllama.Append(CPPDEFINES=["GGML_USE_VULKAN"])
+
+env_gdllama.Append(CPPDEFINES=["GGML_USE_LLAMAFILE"])
+env_gdllama.Append(CPPDEFINES=["GGML_USE_OPENMP"])
+env_gdllama.Append(CPPDEFINES=["_CRT_SECURE_NO_WARNINGS"])
+env_gdllama.Append(CPPDEFINES=[("GGML_SCHED_MAX_COPIES", 4)])
+env_gdllama.Append(CPPDEFINES=[("_XOPEN_SOURCE", 600)])
+env_gdllama.Append(CPPDEFINES=[("_WIN32_WINNT", 0x0A00)])
+
 env_gdllama.add_source_files(env.modules_sources, "*.cpp")
 env_gdllama.add_source_files(env.modules_sources, "*.c")
 
