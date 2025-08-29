@@ -23,13 +23,15 @@ enum SDMode {
 	TXT2IMG,
 	IMG2IMG,
 	IMG2VID,
+	IMG_GEN,
+	VID_GEN,
 	CONVERT,
 	MODE_COUNT
 };
 
 struct SDParams {
 	int n_threads = -1;
-	SDMode mode = TXT2IMG;
+	SDMode mode = IMG_GEN;
 	std::string model_path;
 	std::string clip_l_path;
 	std::string clip_g_path;
@@ -38,21 +40,25 @@ struct SDParams {
 	std::string vae_path;
 	std::string taesd_path;
 	std::string esrgan_path;
-	std::string controlnet_path;
-	std::string embeddings_path;
-	std::string stacked_id_embeddings_path;
+	std::string control_net_path;
+	std::string embedding_dir;
+	std::string stacked_id_embed_dir;
 	std::string input_id_images_path;
 	sd_type_t wtype = SD_TYPE_COUNT;
+	std::string tensor_type_rules;
 	std::string lora_model_dir;
 	std::string output_path = "output.png";
 	std::string input_path;
 	std::string mask_path;
 	std::string control_image_path;
+	std::vector<std::string> ref_image_paths;
 
 	std::string prompt;
 	std::string negative_prompt;
+	std::unordered_map<std::string, float> lora_state;
 	float min_cfg = 1.0f;
 	float cfg_scale = 7.0f;
+	float img_cfg_scale = INFINITY;
 	float guidance = 3.5f;
 	float eta = 0.f;
 	float style_ratio = 20.f;
@@ -80,6 +86,8 @@ struct SDParams {
 	bool clip_on_cpu = false;
 	bool vae_on_cpu = false;
 	bool diffusion_flash_attn = false;
+	bool diffusion_conv_direct = false;
+	bool vae_conv_direct = false;
 	bool canny_preprocess = false;
 	bool color = false;
 	int upscale_repeats = 1;
@@ -88,6 +96,10 @@ struct SDParams {
 	float slg_scale = 0.f;
 	float skip_layer_start = 0.01f;
 	float skip_layer_end = 0.2f;
+
+	bool chroma_use_dit_mask = true;
+	bool chroma_use_t5_mask = false;
+	int chroma_t5_mask_pad = 1;
 };
 
 /* Enables Printing the log level tag in color using ANSI escape codes */
@@ -139,6 +151,8 @@ static sd_ctx_t *sd_ctx;
 static uint8_t *input_image_buffer = NULL;
 static uint8_t *control_image_buffer = NULL;
 static uint8_t *mask_image_buffer = NULL;
+static bool did_set_mask_image = false;
+std::vector<sd_image_t> ref_images;
 static PackedByteArray outputData;
 
 Diffusion::Diffusion() {
@@ -166,6 +180,7 @@ void Diffusion::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_param", "value", "value"), &Diffusion::set_param, DEFVAL(""), DEFVAL(1.0f));
 	ClassDB::bind_method(D_METHOD("set_prompt", "value"), &Diffusion::set_prompt, DEFVAL(""));
 	ClassDB::bind_method(D_METHOD("set_negative_prompt", "value"), &Diffusion::set_negative_prompt, DEFVAL(""));
+	ClassDB::bind_method(D_METHOD("set_lora_state"), &Diffusion::set_lora_state, DEFVAL(NULL));
 	ClassDB::bind_method(D_METHOD("set_image", "value"), &Diffusion::set_image, DEFVAL(NULL));
 	ClassDB::bind_method(D_METHOD("set_control_image", "value"), &Diffusion::set_control_image, DEFVAL(NULL));
 	ClassDB::bind_method(D_METHOD("set_mask_image", "value"), &Diffusion::set_mask_image, DEFVAL(NULL));
@@ -181,7 +196,7 @@ void Diffusion::set_path(const String &modelPath) {
 	params.model_path = std::string(modelPath.utf8().get_data());
 }
 void Diffusion::set_control_path(const String &controlPath) {
-	params.controlnet_path = std::string(controlPath.utf8().get_data());
+	params.control_net_path = std::string(controlPath.utf8().get_data());
 }
 void Diffusion::set_param(const String &paramName_, const float paramValue) {
 	std::string paramName = std::string(paramName_.utf8().get_data());
@@ -219,7 +234,6 @@ void Diffusion::set_image(const PackedByteArray &promptImage) {
 		imageData[i] = promptImage[i];
 	}
 
-	//input_image_buffer = stbi_load(path.c_str(), &width, &height, &c, 3);
 	input_image_buffer = stbi_load_from_memory(imageData, promptImage.size(), &inputImageWidth, &inputImageHeight, &inputImageChannels, 3);
 	delete[] imageData;
 }
@@ -235,8 +249,6 @@ void Diffusion::set_control_image(const PackedByteArray &promptImage) {
 	delete[] imageData;
 }
 void Diffusion::set_mask_image(const PackedByteArray &maskImage) {
-	if (mask_image_buffer != NULL) free(mask_image_buffer);
-
 	unsigned char *imageData = new unsigned char[maskImage.size()];
 	for (int i = 0; i < maskImage.size(); ++i) {
 		imageData[i] = maskImage[i];
@@ -244,9 +256,30 @@ void Diffusion::set_mask_image(const PackedByteArray &maskImage) {
 
 	mask_image_buffer = stbi_load_from_memory(imageData, maskImage.size(), &maskImageWidth, &maskImageHeight, &maskImageChannels, 1);
 	delete[] imageData;
+	did_set_mask_image = true;
 }
 int Diffusion::get_alloc_fail_count() {
 	return allocFailCount;
+}
+void Diffusion::set_lora_state(const Dictionary &loraDict) {
+	Array keys = loraDict.keys();
+	Array values = loraDict.values();
+	std::unordered_map<std::string, float> filename2multiplier;
+
+	for (int i = 0; i < loraDict.size(); ++i) {
+		String key = (String)keys[i];
+		std::string filename = std::string(key.utf8().get_data());
+		float multiplier = (float)values[i];
+
+		if (multiplier == 0.f) {
+			continue;
+		}
+
+		filename2multiplier[filename] = multiplier;
+	}
+
+	params.lora_state = filename2multiplier;
+	shouldUpdateLoraState = true;
 }
 
 PackedByteArray Diffusion::start() {
@@ -256,19 +289,9 @@ PackedByteArray Diffusion::start() {
 
 	bool vae_decode_only = true;
 
-	if (input_image_buffer != NULL) params.mode = IMG2IMG;
-	else params.mode = TXT2IMG;
-
-	if (params.mode == IMG2IMG) {
+	if (input_image_buffer != NULL) {
 		vae_decode_only = false;
 		
-		if (input_image_buffer == NULL) {
-			fprintf(stderr, "load image from '%s' failed\n", params.input_path.c_str());
-
-			freeInputBuffers();
-			isRunning = false;
-			return outputData;
-		}
 		if (inputImageChannels < 3) {
 			fprintf(stderr, "the number of channels for the input image must be >= 3, but got %d channels\n", inputImageChannels);
 
@@ -322,28 +345,37 @@ PackedByteArray Diffusion::start() {
 		}
 	}
 
-	if(sd_ctx == NULL) sd_ctx = new_sd_ctx(params.model_path.c_str(),
-			params.clip_l_path.c_str(),
-			params.clip_g_path.c_str(),
-			params.t5xxl_path.c_str(),
-			params.diffusion_model_path.c_str(),
-			params.vae_path.c_str(),
-			params.taesd_path.c_str(),
-			params.controlnet_path.c_str(),
-			params.lora_model_dir.c_str(),
-			params.embeddings_path.c_str(),
-			params.stacked_id_embeddings_path.c_str(),
-			vae_decode_only,
-			params.vae_tiling,
-			false,
-			params.n_threads,
-			params.wtype,
-			params.rng_type,
-			params.schedule,
-			params.clip_on_cpu,
-			params.control_net_cpu,
-			params.vae_on_cpu,
-			params.diffusion_flash_attn);
+	sd_ctx_params_t sd_ctx_params = {
+		params.model_path.c_str(),
+		params.clip_l_path.c_str(),
+		params.clip_g_path.c_str(),
+		params.t5xxl_path.c_str(),
+		params.diffusion_model_path.c_str(),
+		params.vae_path.c_str(),
+		params.taesd_path.c_str(),
+		params.control_net_path.c_str(),
+		params.lora_model_dir.c_str(),
+		params.embedding_dir.c_str(),
+		params.stacked_id_embed_dir.c_str(),
+		vae_decode_only,
+		params.vae_tiling,
+		false,
+		params.n_threads,
+		params.wtype,
+		params.rng_type,
+		params.schedule,
+		params.clip_on_cpu,
+		params.control_net_cpu,
+		params.vae_on_cpu,
+		params.diffusion_flash_attn,
+		params.diffusion_conv_direct,
+		params.vae_conv_direct,
+		params.chroma_use_dit_mask,
+		params.chroma_use_t5_mask,
+		params.chroma_t5_mask_pad,
+	};
+
+	if (sd_ctx == NULL) sd_ctx = new_sd_ctx(&sd_ctx_params);
 	
 	if (sd_ctx == NULL) {
 		printf("new_sd_ctx_t failed\n");
@@ -351,6 +383,11 @@ PackedByteArray Diffusion::start() {
 		freeInputBuffers();
 		isRunning = false;
 		return outputData;
+	}
+
+	if (shouldUpdateLoraState) {
+		sd_set_lora_state(sd_ctx, &params.lora_state);
+		shouldUpdateLoraState = false;
 	}
 
 	sd_image_t *control_image = NULL;
@@ -403,86 +440,74 @@ PackedByteArray Diffusion::start() {
 	}
 
 	sd_image_t *results = NULL;
-	if (params.mode == TXT2IMG) {
-		if (mask_image_buffer != NULL) free(mask_image_buffer);
+	sd_image_t input_image = {};
+	sd_image_t mask_image = {};
+	sd_guidance_params_t guidance_params = {
+		params.cfg_scale,
+		params.img_cfg_scale,
+		params.min_cfg,
+		params.guidance,
+		{
+			params.skip_layers.data(),
+			params.skip_layers.size(),
+			params.skip_layer_start,
+			params.skip_layer_end,
+			params.slg_scale,
+		}
+	};
 
-		results = txt2img(sd_ctx,
-				params.prompt.c_str(),
-				params.negative_prompt.c_str(),
-				params.clip_skip,
-				params.cfg_scale,
-				params.guidance,
-				params.eta,
-				params.width,
-				params.height,
-				params.sample_method,
-				params.sample_steps,
-				params.seed,
-				params.batch_count,
-				control_image,
-				params.control_strength,
-				params.style_ratio,
-				params.normalize_input,
-				params.input_id_images_path.c_str(),
-				params.skip_layers.data(),
-				params.skip_layers.size(),
-				params.slg_scale,
-				params.skip_layer_start,
-				params.skip_layer_end);
-	}
-	else {
-		sd_image_t input_image = { (uint32_t)params.width,
+	if (input_image_buffer != NULL) {
+		input_image = {
+			(uint32_t)params.width,
 			(uint32_t)params.height,
 			3,
-			input_image_buffer };
+			input_image_buffer
+		};
 
-		if (params.mask_path != "") {
-			int c = 0;
+		/*if (params.mask_path != "") {
 			mask_image_buffer = stbi_load(params.mask_path.c_str(), &maskImageWidth, &maskImageHeight, &maskImageChannels, 1);
+		}*/
+		if (did_set_mask_image) did_set_mask_image = false;
+		else {
+			std::vector<uint8_t> default_mask_image_vec(params.width * params.height, 255);
+			mask_image_buffer = default_mask_image_vec.data();
+			maskImageWidth = inputImageWidth;
+			maskImageHeight = inputImageHeight;
 		}
-		if (mask_image_buffer == NULL) {
-			std::vector<uint8_t> arr(params.width * params.height, 255);
-			mask_image_buffer = arr.data();
-		} else if (maskImageHeight != inputImageHeight || maskImageWidth != inputImageWidth) {
-			printf("resize mask image from %dx%d to %dx%d\n", maskImageWidth, maskImageHeight, inputImageWidth, inputImageHeight);
-
-			freeInputBuffers();
-			isRunning = false;
-			return outputData;
-		}
-
-		sd_image_t mask_image = { (uint32_t)params.width,
+		
+		mask_image = {
+			(uint32_t)params.width,
 			(uint32_t)params.height,
 			1,
-			mask_image_buffer };
-
-		results = img2img(sd_ctx,
-				input_image,
-				mask_image,
-				params.prompt.c_str(),
-				params.negative_prompt.c_str(),
-				params.clip_skip,
-				params.cfg_scale,
-				params.guidance,
-				params.eta,
-				params.width,
-				params.height,
-				params.sample_method,
-				params.sample_steps,
-				params.strength,
-				params.seed,
-				params.batch_count,
-				control_image,
-				params.control_strength,
-				params.style_ratio,
-				params.normalize_input,
-				params.input_id_images_path.c_str(),
-				params.skip_layers.data(),
-				params.skip_layers.size(),
-				params.slg_scale,
-				params.skip_layer_start,
-				params.skip_layer_end);
+			mask_image_buffer
+		};
 	}
+
+	sd_img_gen_params_t img_gen_params = {
+		params.prompt.c_str(),
+		params.negative_prompt.c_str(),
+		params.clip_skip,
+		guidance_params,
+		input_image,
+		ref_images.data(),
+		(int)ref_images.size(),
+		mask_image,
+		params.width,
+		params.height,
+		params.sample_method,
+		params.sample_steps,
+		params.eta,
+		params.strength,
+		params.seed,
+		params.batch_count,
+		control_image,
+		params.control_strength,
+		params.style_ratio,
+		params.normalize_input,
+		params.input_id_images_path.c_str(),
+	};
+
+	results = generate_image(sd_ctx, &img_gen_params);
 
 	if (results == NULL) {
 		printf("generate failed\n");
@@ -551,11 +576,9 @@ PackedByteArray Diffusion::start() {
 void Diffusion::freeInputBuffers() {
 	if (input_image_buffer != NULL) free(input_image_buffer);
 	if (control_image_buffer != NULL) free(control_image_buffer);
-	if (mask_image_buffer != NULL) free(mask_image_buffer);
 
 	input_image_buffer = NULL;
 	control_image_buffer = NULL;
-	mask_image_buffer = NULL;
 }
 void Diffusion::freeModel() {
 	if (!isRunning && sd_ctx != NULL) {

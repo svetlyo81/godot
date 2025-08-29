@@ -9,6 +9,7 @@ class Diffusion : public RefCounted {
 
 private:
 	bool isRunning = false;
+	bool shouldUpdateLoraState = false;
 
 	int inputImageChannels = 0;
 	int inputImageWidth = 0;
@@ -31,10 +32,12 @@ public:
 	void set_param(const String &paramName_, float paramValue);
 	void set_prompt(const String &promptString);
 	void set_negative_prompt(const String &promptString);
+	void set_lora_state(const Dictionary &loraDict);
 	void set_image(const PackedByteArray &promptImage);
 	void set_control_image(const PackedByteArray &promptImage);
 	void set_mask_image(const PackedByteArray &maskImage);
 	int get_alloc_fail_count();
+
 	PackedByteArray start();
 	void freeInputBuffers();
 	void freeModel();
