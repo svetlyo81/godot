@@ -80,7 +80,6 @@ struct SDParams {
 	rng_type_t rng_type = CUDA_RNG;
 	int64_t seed = 42;
 	bool verbose = false;
-	bool vae_tiling = false;
 	bool control_net_cpu = false;
 	bool normalize_input = false;
 	bool clip_on_cpu = false;
@@ -100,6 +99,7 @@ struct SDParams {
 	bool chroma_use_dit_mask = true;
 	bool chroma_use_t5_mask = false;
 	int chroma_t5_mask_pad = 1;
+	sd_tiling_params_t vae_tiling_params = { false, 0, 0, 0.5f, 0.0f, 0.0f };
 };
 
 /* Enables Printing the log level tag in color using ANSI escape codes */
@@ -145,7 +145,6 @@ void sd_log_cb(enum sd_log_level_t level, const char *log, void *data) {
 	fflush(out_stream);
 }
 
-static bool didInstantiate = false;
 static SDParams params;
 static sd_ctx_t *sd_ctx;
 static uint8_t *input_image_buffer = NULL;
@@ -156,16 +155,13 @@ std::vector<sd_image_t> ref_images;
 static PackedByteArray outputData;
 
 Diffusion::Diffusion() {
-	if (didInstantiate) {
-		printf("There can be only one Diffusion instance\n");
-		return;
-	} else didInstantiate = true;
-
 	params.n_threads = get_num_physical_cores();
 	params.width = 768;
 	params.height = 512;
 	params.seed = -1;
 	params.mask_path = "";
+	params.diffusion_flash_attn = true;
+	params.clip_skip = 2;
 
 	sd_set_log_callback(sd_log_cb, (void *)&params);
 }
@@ -215,8 +211,8 @@ void Diffusion::set_param(const String &paramName_, const float paramValue) {
 		else params.taesd_path = "";
 	}
 	else if (paramName == "enable_vae_tiling") {
-		if (paramValue == 1.0f) params.vae_tiling = true;
-		else params.vae_tiling = false;
+		if (paramValue == 1.0f) params.vae_tiling_params.enabled = true;
+		else params.vae_tiling_params.enabled = false;
 	}
 }
 void Diffusion::set_prompt(const String &promptString) {
@@ -227,35 +223,15 @@ void Diffusion::set_negative_prompt(const String &promptString) {
 }
 void Diffusion::set_image(const PackedByteArray &promptImage) {
 	outputData.clear();
-	if (input_image_buffer != NULL) free(input_image_buffer);
-
-	unsigned char *imageData = new unsigned char[promptImage.size()];
-	for (int i = 0; i < promptImage.size(); ++i) {
-		imageData[i] = promptImage[i];
-	}
-
-	input_image_buffer = stbi_load_from_memory(imageData, promptImage.size(), &inputImageWidth, &inputImageHeight, &inputImageChannels, 3);
-	delete[] imageData;
+	if (input_image_buffer != NULL) free(input_image_buffer);	
+	input_image_buffer = stbi_load_from_memory(promptImage.ptr(), promptImage.size(), &inputImageWidth, &inputImageHeight, &inputImageChannels, 3);
 }
 void Diffusion::set_control_image(const PackedByteArray &promptImage) {
 	if (control_image_buffer != NULL) free(control_image_buffer);
-
-	unsigned char *imageData = new unsigned char[promptImage.size()];
-	for (int i = 0; i < promptImage.size(); ++i) {
-		imageData[i] = promptImage[i];
-	}
-
-	control_image_buffer = stbi_load_from_memory(imageData, promptImage.size(), &controlImageWidth, &controlImageHeight, &controlImageChannels, 3);
-	delete[] imageData;
+	control_image_buffer = stbi_load_from_memory(promptImage.ptr(), promptImage.size(), &controlImageWidth, &controlImageHeight, &controlImageChannels, 3);
 }
 void Diffusion::set_mask_image(const PackedByteArray &maskImage) {
-	unsigned char *imageData = new unsigned char[maskImage.size()];
-	for (int i = 0; i < maskImage.size(); ++i) {
-		imageData[i] = maskImage[i];
-	}
-
-	mask_image_buffer = stbi_load_from_memory(imageData, maskImage.size(), &maskImageWidth, &maskImageHeight, &maskImageChannels, 1);
-	delete[] imageData;
+	mask_image_buffer = stbi_load_from_memory(maskImage.ptr(), maskImage.size(), &maskImageWidth, &maskImageHeight, &maskImageChannels, 1);
 	did_set_mask_image = true;
 }
 int Diffusion::get_alloc_fail_count() {
@@ -358,7 +334,6 @@ PackedByteArray Diffusion::start() {
 		params.embedding_dir.c_str(),
 		params.stacked_id_embed_dir.c_str(),
 		vae_decode_only,
-		params.vae_tiling,
 		false,
 		params.n_threads,
 		params.wtype,
@@ -505,6 +480,7 @@ PackedByteArray Diffusion::start() {
 		params.style_ratio,
 		params.normalize_input,
 		params.input_id_images_path.c_str(),
+		params.vae_tiling_params,
 	};
 
 	results = generate_image(sd_ctx, &img_gen_params);
@@ -555,8 +531,10 @@ PackedByteArray Diffusion::start() {
 		}
 		
 		outputData.resize(len);
+		uint8_t *outputDataPtr = outputData.ptrw();
 		for (int i = 0; i < outputData.size(); ++i) {
-			outputData.set(i, pngArray[i]);
+			//outputData.set(i, pngArray[i]);
+			outputDataPtr[i] = pngArray[i];
 		}
 
 		STBIW_FREE(pngArray);

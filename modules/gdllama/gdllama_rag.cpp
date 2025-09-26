@@ -282,9 +282,10 @@ void Rag::initialize() {
 	} else {
 		llama_free(ctx);
 		ctx = NULL;
+		embedding_size = llama_n_embd(model);
 	}
 
-	embedding_size = llama_n_embd(model);
+	llama_backend_free();
 }
 
 PackedStringArray Rag::retrieve_similar_texts(const String text, const String where, const int n_results) {
@@ -531,6 +532,9 @@ std::vector<float> Rag::compute_embedding(
 		//, std::function<void(std::vector<float>)> on_compute_finished
 ) {
 	params.prompt = prompt;
+
+	struct llama_context_params lparams = llama_context_params_from_gpt_params(params);
+	ctx = llama_new_context_with_model(model, lparams);
 
 	const int n_ctx_train = llama_n_ctx_train(model);
 	const int n_ctx = llama_n_ctx(ctx);
