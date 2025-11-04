@@ -31,8 +31,7 @@
 #include "audio_stream_polyphonic.h"
 #include "audio_stream_polyphonic.compat.inc"
 
-#include "scene/main/scene_tree.h"
-#include "servers/audio_server.h"
+#include "servers/audio/audio_server.h"
 
 constexpr uint64_t ID_MASK = 0xFFFFFFFF;
 constexpr uint64_t INDEX_SHIFT = 32;
@@ -179,7 +178,7 @@ int AudioStreamPlaybackPolyphonic::mix(AudioFrame *p_buffer, float p_rate_scale,
 
 		while (todo) {
 			int to_mix = MIN(todo, int(INTERNAL_BUFFER_LEN));
-			int mixed = s.stream_playback->mix(internal_buffer, s.pitch_scale, to_mix);
+			int mixed = s.stream_playback->mix(internal_buffer, p_rate_scale * s.pitch_scale, to_mix);
 
 			for (int i = 0; i < to_mix; i++) {
 				p_buffer[offset + i] += internal_buffer[i] * volume;
@@ -217,6 +216,13 @@ AudioStreamPlaybackPolyphonic::ID AudioStreamPlaybackPolyphonic::play_stream(con
 			: p_playback_type;
 
 	for (uint32_t i = 0; i < streams.size(); i++) {
+		if (streams[i].active.is_set() && streams[i].stream_playback->get_is_sample()) {
+			Ref<AudioSamplePlayback> active_sample_playback = streams[i].stream_playback->get_sample_playback();
+			if (active_sample_playback.is_null() || !AudioServer::get_singleton()->is_sample_playback_active(active_sample_playback)) {
+				streams[i].active.clear();
+			}
+		}
+
 		if (!streams[i].active.is_set()) {
 			// Can use this stream, as it's not active.
 			streams[i].stream = p_stream;
@@ -278,6 +284,21 @@ AudioStreamPlaybackPolyphonic::Stream *AudioStreamPlaybackPolyphonic::_find_stre
 	return &streams[index];
 }
 
+const AudioStreamPlaybackPolyphonic::Stream *AudioStreamPlaybackPolyphonic::_find_stream(int64_t p_id) const {
+	uint32_t index = static_cast<uint64_t>(p_id) >> INDEX_SHIFT;
+	if (index >= streams.size()) {
+		return nullptr;
+	}
+	if (!streams[index].active.is_set()) {
+		return nullptr; // Not active, no longer exists.
+	}
+	int64_t id = static_cast<uint64_t>(p_id) & ID_MASK;
+	if (streams[index].id != id) {
+		return nullptr;
+	}
+	return &streams[index];
+}
+
 void AudioStreamPlaybackPolyphonic::set_stream_volume(ID p_stream_id, float p_volume_db) {
 	Stream *s = _find_stream(p_stream_id);
 	if (!s) {
@@ -295,7 +316,7 @@ void AudioStreamPlaybackPolyphonic::set_stream_pitch_scale(ID p_stream_id, float
 }
 
 bool AudioStreamPlaybackPolyphonic::is_stream_playing(ID p_stream_id) const {
-	return const_cast<AudioStreamPlaybackPolyphonic *>(this)->_find_stream(p_stream_id) != nullptr;
+	return _find_stream(p_stream_id) != nullptr;
 }
 
 void AudioStreamPlaybackPolyphonic::stop_stream(ID p_stream_id) {

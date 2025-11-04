@@ -28,10 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef MUTEX_H
-#define MUTEX_H
+#pragma once
 
-#include "core/error/error_macros.h"
 #include "core/typedefs.h"
 
 #ifdef MINGW_ENABLED
@@ -72,7 +70,7 @@ public:
 
 template <typename MutexT>
 class MutexLock {
-	THREADING_NAMESPACE::unique_lock<typename MutexT::StdMutexType> lock;
+	mutable THREADING_NAMESPACE::unique_lock<typename MutexT::StdMutexType> lock;
 
 public:
 	explicit MutexLock(const MutexT &p_mutex) :
@@ -82,8 +80,18 @@ public:
 	template <typename T = MutexT>
 	_ALWAYS_INLINE_ THREADING_NAMESPACE::unique_lock<THREADING_NAMESPACE::mutex> &_get_lock(
 			typename std::enable_if<std::is_same<T, THREADING_NAMESPACE::mutex>::value> * = nullptr) const {
-		return const_cast<THREADING_NAMESPACE::unique_lock<THREADING_NAMESPACE::mutex> &>(lock);
+		return lock;
 	}
+
+	_ALWAYS_INLINE_ void temp_relock() const {
+		lock.lock();
+	}
+
+	_ALWAYS_INLINE_ void temp_unlock() const {
+		lock.unlock();
+	}
+
+	// TODO: Implement a `try_temp_relock` if needed (will also need a dummy method below).
 };
 
 using Mutex = MutexImpl<THREADING_NAMESPACE::recursive_mutex>; // Recursive, for general use
@@ -109,11 +117,12 @@ template <typename MutexT>
 class MutexLock {
 public:
 	MutexLock(const MutexT &p_mutex) {}
+
+	void temp_relock() const {}
+	void temp_unlock() const {}
 };
 
 using Mutex = MutexImpl;
 using BinaryMutex = MutexImpl;
 
 #endif // THREADS_ENABLED
-
-#endif // MUTEX_H

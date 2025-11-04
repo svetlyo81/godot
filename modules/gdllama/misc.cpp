@@ -7,9 +7,7 @@ std::string string_gd_to_std(String s) {
 }
 
 String string_std_to_gd(std::string s) {
-	String new_s;
-	new_s.parse_utf8(s.data());
-	return new_s;
+	return String::utf8(s.c_str());
 }
 
 // https://stackoverflow.com/questions/28270310/how-to-easily-detect-utf8-encoding-in-the-string

@@ -61,6 +61,10 @@ partial class ExportedFields
         /// </summary>
         public new static readonly global::Godot.StringName @_fieldString = "_fieldString";
         /// <summary>
+        /// Cached name for the '_fieldStaticImport' field.
+        /// </summary>
+        public new static readonly global::Godot.StringName @_fieldStaticImport = "_fieldStaticImport";
+        /// <summary>
         /// Cached name for the '_fieldVector2' field.
         /// </summary>
         public new static readonly global::Godot.StringName @_fieldVector2 = "_fieldVector2";
@@ -303,6 +307,10 @@ partial class ExportedFields
         }
         if (name == PropertyName.@_fieldString) {
             this.@_fieldString = global::Godot.NativeInterop.VariantUtils.ConvertTo<string>(value);
+            return true;
+        }
+        if (name == PropertyName.@_fieldStaticImport) {
+            this.@_fieldStaticImport = global::Godot.NativeInterop.VariantUtils.ConvertTo<float>(value);
             return true;
         }
         if (name == PropertyName.@_fieldVector2) {
@@ -551,6 +559,10 @@ partial class ExportedFields
             value = global::Godot.NativeInterop.VariantUtils.CreateFrom<string>(this.@_fieldString);
             return true;
         }
+        if (name == PropertyName.@_fieldStaticImport) {
+            value = global::Godot.NativeInterop.VariantUtils.CreateFrom<float>(this.@_fieldStaticImport);
+            return true;
+        }
         if (name == PropertyName.@_fieldVector2) {
             value = global::Godot.NativeInterop.VariantUtils.CreateFrom<global::Godot.Vector2>(this.@_fieldVector2);
             return true;
@@ -763,6 +775,7 @@ partial class ExportedFields
         properties.Add(new(type: (global::Godot.Variant.Type)3, name: PropertyName.@_fieldSingle, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
         properties.Add(new(type: (global::Godot.Variant.Type)3, name: PropertyName.@_fieldDouble, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
         properties.Add(new(type: (global::Godot.Variant.Type)4, name: PropertyName.@_fieldString, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
+        properties.Add(new(type: (global::Godot.Variant.Type)3, name: PropertyName.@_fieldStaticImport, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
         properties.Add(new(type: (global::Godot.Variant.Type)5, name: PropertyName.@_fieldVector2, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
         properties.Add(new(type: (global::Godot.Variant.Type)6, name: PropertyName.@_fieldVector2I, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
         properties.Add(new(type: (global::Godot.Variant.Type)7, name: PropertyName.@_fieldRect2, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
@@ -807,7 +820,7 @@ partial class ExportedFields
         properties.Add(new(type: (global::Godot.Variant.Type)23, name: PropertyName.@_fieldRid, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
         properties.Add(new(type: (global::Godot.Variant.Type)27, name: PropertyName.@_fieldGodotDictionary, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
         properties.Add(new(type: (global::Godot.Variant.Type)28, name: PropertyName.@_fieldGodotArray, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
-        properties.Add(new(type: (global::Godot.Variant.Type)27, name: PropertyName.@_fieldGodotGenericDictionary, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
+        properties.Add(new(type: (global::Godot.Variant.Type)27, name: PropertyName.@_fieldGodotGenericDictionary, hint: (global::Godot.PropertyHint)23, hintString: "4/0:;1/0:", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
         properties.Add(new(type: (global::Godot.Variant.Type)28, name: PropertyName.@_fieldGodotGenericArray, hint: (global::Godot.PropertyHint)23, hintString: "2/0:", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
         properties.Add(new(type: (global::Godot.Variant.Type)31, name: PropertyName.@_fieldEmptyInt64Array, hint: (global::Godot.PropertyHint)0, hintString: "", usage: (global::Godot.PropertyUsageFlags)4102, exported: true));
         return properties;

@@ -1,5 +1,6 @@
 
 #include "gdllama_diffusion.h"
+#include "gdllama_vision.h"
 
 #include <vector>
 #include <iostream>
@@ -151,8 +152,10 @@ static uint8_t *input_image_buffer = NULL;
 static uint8_t *control_image_buffer = NULL;
 static uint8_t *mask_image_buffer = NULL;
 static bool did_set_mask_image = false;
-std::vector<sd_image_t> ref_images;
 static PackedByteArray outputData;
+
+
+std::vector<sd_image_t> ref_images;
 
 Diffusion::Diffusion() {
 	params.n_threads = get_num_physical_cores();
@@ -162,6 +165,7 @@ Diffusion::Diffusion() {
 	params.mask_path = "";
 	params.diffusion_flash_attn = true;
 	params.clip_skip = 2;
+	params.vae_tiling_params.enabled = true;
 
 	sd_set_log_callback(sd_log_cb, (void *)&params);
 }
@@ -172,6 +176,7 @@ Diffusion::~Diffusion() {
 void Diffusion::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_running"), &Diffusion::is_running);
 	ClassDB::bind_method(D_METHOD("set_path", "value"), &Diffusion::set_path, DEFVAL(""));
+	ClassDB::bind_method(D_METHOD("set_path_flux", "value"), &Diffusion::set_path_flux, DEFVAL(""));
 	ClassDB::bind_method(D_METHOD("set_control_path", "value"), &Diffusion::set_control_path, DEFVAL(""));
 	ClassDB::bind_method(D_METHOD("set_param", "value", "value"), &Diffusion::set_param, DEFVAL(""), DEFVAL(1.0f));
 	ClassDB::bind_method(D_METHOD("set_prompt", "value"), &Diffusion::set_prompt, DEFVAL(""));
@@ -190,6 +195,17 @@ bool Diffusion::is_running() {
 }
 void Diffusion::set_path(const String &modelPath) {
 	params.model_path = std::string(modelPath.utf8().get_data());
+	params.diffusion_model_path = "";
+	params.vae_path = "";
+	params.clip_l_path = "";
+	params.t5xxl_path = "";
+}
+void Diffusion::set_path_flux(const String &modelPath) {
+	params.model_path = "";
+	params.diffusion_model_path = std::string(modelPath.utf8().get_data());
+	params.vae_path = "ae.safetensors";
+	params.clip_l_path = "clip_l.safetensors";
+	params.t5xxl_path = "t5xxl_fp16.safetensors";
 }
 void Diffusion::set_control_path(const String &controlPath) {
 	params.control_net_path = std::string(controlPath.utf8().get_data());
@@ -213,6 +229,10 @@ void Diffusion::set_param(const String &paramName_, const float paramValue) {
 	else if (paramName == "enable_vae_tiling") {
 		if (paramValue == 1.0f) params.vae_tiling_params.enabled = true;
 		else params.vae_tiling_params.enabled = false;
+	}
+	else if (paramName == "enable_dnn_superres") {
+		if (paramValue == 1.0f) enableDNNSuperres = true;
+		else enableDNNSuperres = false;
 	}
 }
 void Diffusion::set_prompt(const String &promptString) {
@@ -519,26 +539,28 @@ PackedByteArray Diffusion::start() {
 		if (resultsData == NULL) allocFailCount = 0;
 		else allocFailCount++;
 		
-		int len;
-		unsigned char *pngArray = stbi_write_png_to_mem((const unsigned char *)results[0].data, 0, results[0].width, results[0].height, results[0].channel, &len, "");
-		
-		if (pngArray == NULL) {
-			printf("generate failed\n");
-
+		cv::Mat pngMat(results[0].height, results[0].width, CV_8UC3, results[0].data);
+		if (pngMat.empty()) {
 			freeInputBuffers();
 			isRunning = false;
 			return outputData;
 		}
-		
-		outputData.resize(len);
+		cv::cvtColor(pngMat, pngMat, cv::COLOR_BGR2RGB);
+
+		if(enableDNNSuperres) Vision::cv_dnn_sr().upsample(pngMat, pngMat);
+
+		std::vector<uchar> pngData;
+		std::vector<int> compressionParams = { cv::IMWRITE_PNG_COMPRESSION, 1 };
+		bool success = cv::imencode(".png", pngMat, pngData, compressionParams);
+		const unsigned char *pngArray = pngData.data();
+
+		outputData.resize(pngData.size());
 		uint8_t *outputDataPtr = outputData.ptrw();
 		for (int i = 0; i < outputData.size(); ++i) {
-			//outputData.set(i, pngArray[i]);
 			outputDataPtr[i] = pngArray[i];
 		}
 
-		STBIW_FREE(pngArray);
-
+		pngMat.release();
 		free(results[0].data);
 		results[0].data = NULL;
 	}
@@ -547,7 +569,6 @@ PackedByteArray Diffusion::start() {
 
 	freeInputBuffers();
 	isRunning = false;
-
 	return outputData;
 }
 

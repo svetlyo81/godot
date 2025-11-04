@@ -76,26 +76,10 @@ static bool file_is_empty(const std::string &path) {
 	return f.tellg() == 0;
 }
 
-#if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__)) || defined(_WIN32)
-static void sigint_handler(int signo) {
-	if (signo == SIGINT) {
-		if (!is_interacting && g_params->interactive) {
-			is_interacting = true;
-			need_insert_eot = true;
-		} else {
-			//console::cleanup();
-			printf("\n");
-			llama_print_timings(*g_ctx);
-			_exit(130);
-		}
-	}
-}
-#endif
-
-static std::string chat_add_and_format(struct llama_model *model, std::vector<llama_chat_msg> &chat_msgs, std::string role, std::string content) {
+static std::string chat_add_and_format(struct llama_model *model_, std::vector<llama_chat_msg> &chat_msgs, std::string role, std::string content) {
 	llama_chat_msg new_msg{ role, content };
 	auto formatted = llama_chat_format_single(
-			model, g_params->chat_template, chat_msgs, new_msg, role == "user");
+			model_, g_params->chat_template, chat_msgs, new_msg, role == "user");
 	chat_msgs.push_back({ role, content });
 	printf("formatted: %s\n", formatted.c_str());
 	return formatted;
@@ -119,7 +103,6 @@ Llama::Llama() {
 	//params.use_mmap = false;
 
 	params.sparams.temp = 0.35f;
-	//params.sparams.temp = 0.1f;
 	params.sparams.top_k = 0;
 	params.sparams.top_p = 1.0f;
 	params.sparams.min_p = 0.05;
@@ -198,6 +181,8 @@ void Llama::set_param(const String &paramName_, const float paramValue) {
 	std::string paramName = std::string(paramName_.utf8().get_data());
 
 	if (paramName == "temp") params.sparams.temp = paramValue;
+	else if (paramName == "repeat") params.sparams.penalty_repeat = paramValue;
+	else if (paramName == "min_p") params.sparams.min_p = paramValue;
 
 	//printf("%f\n", params.sparams.temp);
 }
@@ -464,8 +449,8 @@ void Llama::start() {
     // Tokenize negative prompt
 	std::vector<llama_token> guidance_inp;
 	int guidance_offset = 0;
-	int original_prompt_len = 0;
-	/*if (ctx_guidance) {
+	/*int original_prompt_len = 0;
+	if (ctx_guidance) {
 		printf("cfg_negative_prompt: \"%s\"\n", log_tostr(sparams.cfg_negative_prompt));
 
 		guidance_inp = ::llama_tokenize(ctx_guidance, sparams.cfg_negative_prompt, true, true);

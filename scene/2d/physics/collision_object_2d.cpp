@@ -51,7 +51,7 @@ void CollisionObject2D::_notification(int p_what) {
 
 			if (!disabled || (disable_mode != DISABLE_MODE_REMOVE)) {
 				Ref<World2D> world_ref = get_world_2d();
-				ERR_FAIL_COND(!world_ref.is_valid());
+				ERR_FAIL_COND(world_ref.is_null());
 				RID space = world_ref->get_space();
 				if (area) {
 					PhysicsServer2D::get_singleton()->area_set_space(rid, space);
@@ -295,7 +295,7 @@ uint32_t CollisionObject2D::create_shape_owner(Object *p_owner) {
 	ShapeData sd;
 	uint32_t id;
 
-	if (shapes.size() == 0) {
+	if (shapes.is_empty()) {
 		id = 0;
 	} else {
 		id = shapes.back()->key() + 1;
@@ -655,6 +655,8 @@ void CollisionObject2D::_bind_methods() {
 }
 
 CollisionObject2D::CollisionObject2D(RID p_rid, bool p_area) {
+	_define_ancestry(AncestralClass::COLLISION_OBJECT_2D);
+
 	rid = p_rid;
 	area = p_area;
 	pickable = true;
@@ -672,6 +674,7 @@ CollisionObject2D::CollisionObject2D(RID p_rid, bool p_area) {
 }
 
 CollisionObject2D::CollisionObject2D() {
+	_define_ancestry(AncestralClass::COLLISION_OBJECT_2D);
 	//owner=
 
 	set_notify_transform(true);
@@ -679,5 +682,5 @@ CollisionObject2D::CollisionObject2D() {
 
 CollisionObject2D::~CollisionObject2D() {
 	ERR_FAIL_NULL(PhysicsServer2D::get_singleton());
-	PhysicsServer2D::get_singleton()->free(rid);
+	PhysicsServer2D::get_singleton()->free_rid(rid);
 }

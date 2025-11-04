@@ -10,6 +10,7 @@ class Diffusion : public RefCounted {
 private:
 	bool isRunning = false;
 	bool shouldUpdateLoraState = false;
+	bool enableDNNSuperres = false;
 
 	int inputImageChannels = 0;
 	int inputImageWidth = 0;
@@ -28,6 +29,7 @@ protected:
 public:
 	bool is_running();
 	void set_path(const String &modelPath);
+	void set_path_flux(const String &modelPath);
 	void set_control_path(const String &controlPath);
 	void set_param(const String &paramName_, float paramValue);
 	void set_prompt(const String &promptString);

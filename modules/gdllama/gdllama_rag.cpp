@@ -191,6 +191,7 @@ Rag::Rag() {
 	meta = TypedArray<LlmDBMetaData>();
 	meta.append(LlmDBMetaData::create_text("id"));
 	meta.append(LlmDBMetaData::create_int("type"));
+	meta.append(LlmDBMetaData::create_int("time"));
 }
 Rag::~Rag() {
     printf("Rag dealloc\n");
@@ -404,7 +405,7 @@ bool Rag::insert_text(const String text, const Dictionary meta_dict) {
 	for (int i = 0; i < meta.size(); i++) {
 		Ref<LlmDBMetaData> sd = Object::cast_to<LlmDBMetaData>(meta[i]);
 		if (p_meta_dict.has(sd->get_data_name())) {
-			Variant v = p_meta_dict.get(sd->get_data_name(), NULL);
+			Variant v = p_meta_dict.get(sd->get_data_name(), 0);
 			if (v.get_type() != type_int_to_variant(sd->get_data_type())) {
 				printf("Wrong data type for key %s\n", (sd->get_data_name() + " : " + v.get_type_name(v.get_type()) + " instead of " + sd->get_data_type()).utf8().get_data());
 			}
@@ -528,10 +529,10 @@ bool Rag::execute(String statement) {
 }
 
 std::vector<float> Rag::compute_embedding(
-		std::string prompt
+		std::string prompt_
 		//, std::function<void(std::vector<float>)> on_compute_finished
 ) {
-	params.prompt = prompt;
+	params.prompt = prompt_;
 
 	struct llama_context_params lparams = llama_context_params_from_gpt_params(params);
 	ctx = llama_new_context_with_model(model, lparams);
@@ -732,7 +733,7 @@ PackedStringArray Rag::chunk_split_text(String text, int index) {
 
 			printf("Using separator: %s\n", separator.utf8().get_data());
 			printf("Separator size: %d\n", separator_size);
-			printf("array size: %I64d\n", array.size());
+			printf("array size: %lld\n", array.size());
 
 			int end_index = 0;
 			String s = array[end_index];
