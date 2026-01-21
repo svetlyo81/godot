@@ -31,8 +31,11 @@
 #include "quick_settings_dialog.h"
 
 #include "core/string/translation_server.h"
+#include "editor/doc/editor_help.h"
 #include "editor/editor_string_names.h"
+#include "editor/inspector/editor_properties.h"
 #include "editor/settings/editor_settings.h"
+#include "editor/settings/editor_settings_dialog.h"
 #include "editor/themes/editor_scale.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/button.h"
@@ -44,6 +47,7 @@ void QuickSettingsDialog::_fetch_setting_values() {
 #ifndef ANDROID_ENABLED
 	editor_languages.clear();
 #endif
+	editor_styles.clear();
 	editor_themes.clear();
 	editor_scales.clear();
 	editor_network_modes.clear();
@@ -59,6 +63,8 @@ void QuickSettingsDialog::_fetch_setting_values() {
 #ifndef ANDROID_ENABLED
 				editor_languages = pi.hint_string.split(";", false);
 #endif
+			} else if (pi.name == "interface/theme/style") {
+				editor_styles = pi.hint_string.split(",");
 			} else if (pi.name == "interface/theme/color_preset") {
 				editor_themes = pi.hint_string.split(",");
 			} else if (pi.name == "interface/editor/display_scale") {
@@ -90,6 +96,17 @@ void QuickSettingsDialog::_update_current_values() {
 		}
 	}
 #endif
+	// Style options.
+	{
+		const String current_style = EDITOR_GET("interface/theme/style");
+
+		for (int i = 0; i < editor_styles.size(); i++) {
+			const String &style_value = editor_styles[i];
+			if (current_style == style_value) {
+				style_option_button->select(i);
+			}
+		}
+	}
 
 	// Theme options.
 	{
@@ -172,7 +189,6 @@ void QuickSettingsDialog::_add_setting_control(const String &p_text, Control *p_
 	container->add_child(label);
 
 	p_control->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	p_control->set_stretch_ratio(2.0);
 	container->add_child(p_control);
 }
 
@@ -182,6 +198,11 @@ void QuickSettingsDialog::_language_selected(int p_id) {
 	_set_setting_value("interface/editor/editor_language", selected_language);
 }
 #endif
+
+void QuickSettingsDialog::_style_selected(int p_id) {
+	const String selected_style = style_option_button->get_item_text(p_id);
+	_set_setting_value("interface/theme/style", selected_style);
+}
 
 void QuickSettingsDialog::_theme_selected(int p_id) {
 	const String selected_theme = theme_option_button->get_item_text(p_id);
@@ -226,6 +247,25 @@ void QuickSettingsDialog::_set_setting_value(const String &p_setting, const Vari
 			restart_required_button->connect(SceneStringName(pressed), callable_mp(this, &QuickSettingsDialog::_request_restart));
 		}
 	}
+}
+
+void QuickSettingsDialog::_show_full_settings() {
+	if (!editor_settings_dialog) {
+		EditorHelp::generate_doc();
+
+		Ref<EditorInspectorDefaultPlugin> eidp;
+		eidp.instantiate();
+		EditorInspector::add_inspector_plugin(eidp);
+
+		EditorPropertyNameProcessor *epnp = memnew(EditorPropertyNameProcessor);
+		add_child(epnp);
+
+		editor_settings_dialog = memnew(EditorSettingsDialog);
+		get_parent()->add_child(editor_settings_dialog);
+		editor_settings_dialog->connect("restart_requested", callable_mp(this, &QuickSettingsDialog::_request_restart));
+	}
+	hide();
+	editor_settings_dialog->popup_edit_settings();
 }
 
 void QuickSettingsDialog::_request_restart() {
@@ -295,6 +335,19 @@ QuickSettingsDialog::QuickSettingsDialog() {
 			_add_setting_control(TTRC("Language"), language_option_button);
 		}
 #endif
+		// Style options.
+		{
+			style_option_button = memnew(OptionButton);
+			style_option_button->set_fit_to_longest_item(false);
+			style_option_button->connect(SceneStringName(item_selected), callable_mp(this, &QuickSettingsDialog::_style_selected));
+
+			for (int i = 0; i < editor_styles.size(); i++) {
+				const String &style_value = editor_styles[i];
+				style_option_button->add_item(style_value, i);
+			}
+
+			_add_setting_control(TTRC("Style"), style_option_button);
+		}
 
 		// Theme options.
 		{
@@ -376,6 +429,15 @@ QuickSettingsDialog::QuickSettingsDialog() {
 		}
 
 		_update_current_values();
+	}
+
+	// Full settings button.
+	{
+		Button *open_full_settings = memnew(Button);
+		open_full_settings->set_text(TTRC("Edit All Settings"));
+		open_full_settings->set_h_size_flags(Control::SIZE_SHRINK_END);
+		settings_list->add_child(open_full_settings);
+		open_full_settings->connect(SceneStringName(pressed), callable_mp(this, &QuickSettingsDialog::_show_full_settings));
 	}
 
 	// Restart required panel.

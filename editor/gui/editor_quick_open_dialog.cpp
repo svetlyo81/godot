@@ -38,6 +38,7 @@
 #include "editor/editor_undo_redo_manager.h"
 #include "editor/file_system/editor_file_system.h"
 #include "editor/file_system/editor_paths.h"
+#include "editor/gui/editor_toaster.h"
 #include "editor/inspector/editor_resource_preview.h"
 #include "editor/inspector/multi_node_edit.h"
 #include "editor/settings/editor_settings.h"
@@ -188,6 +189,8 @@ void EditorQuickOpenDialog::_finish_dialog_setup(const Vector<StringName> &p_bas
 }
 
 void EditorQuickOpenDialog::ok_pressed() {
+	container->save_selected_item();
+
 	update_property();
 	container->cleanup();
 	search_box->clear();
@@ -215,7 +218,6 @@ void EditorQuickOpenDialog::selection_changed() {
 void EditorQuickOpenDialog::item_pressed(bool p_double_click) {
 	// A double-click should always be taken as a "confirm" action.
 	if (p_double_click) {
-		container->save_selected_item();
 		ok_pressed();
 		return;
 	}
@@ -223,7 +225,6 @@ void EditorQuickOpenDialog::item_pressed(bool p_double_click) {
 	// Single-clicks should be taken as a "confirm" action only if Instant Preview
 	// isn't currently enabled, or the property object is null for some reason.
 	if (!_is_instant_preview_active()) {
-		container->save_selected_item();
 		ok_pressed();
 	}
 }
@@ -232,14 +233,26 @@ void EditorQuickOpenDialog::preview_property() {
 	Ref<Resource> loaded_resource = ResourceLoader::load(container->get_selected());
 	ERR_FAIL_COND_MSG(loaded_resource.is_null(), "Cannot load resource from path '" + container->get_selected() + "'.");
 
+	Resource *res = Object::cast_to<Resource>(property_object);
+	if (res) {
+		HashSet<Resource *> resources_found;
+		resources_found.insert(res);
+		if (EditorNode::find_recursive_resources(loaded_resource, resources_found)) {
+			EditorToaster::get_singleton()->popup_str(TTR("Recursion detected, Instant Preview failed."), EditorToaster::SEVERITY_ERROR);
+			loaded_resource = Ref<Resource>();
+		}
+	}
+
 	// MultiNodeEdit has adding to the undo/redo stack baked into its set function.
 	// As such, we have to specifically call a version of its setter that doesn't
 	// create undo/redo actions.
+	property_object->set_block_signals(true);
 	if (Object::cast_to<MultiNodeEdit>(property_object)) {
 		Object::cast_to<MultiNodeEdit>(property_object)->_set_impl(property_path, loaded_resource, "", false);
 	} else {
 		property_object->set(property_path, loaded_resource);
 	}
+	property_object->set_block_signals(false);
 }
 
 void EditorQuickOpenDialog::update_property() {
@@ -252,6 +265,15 @@ void EditorQuickOpenDialog::update_property() {
 			property_object->set(property_path, initial_property_value);
 		}
 	}
+
+	if (!item_selected_callback.is_valid()) {
+		String err_msg = "The callback provided to the Quick Open dialog was invalid.";
+		if (_is_instant_preview_active()) {
+			err_msg += " Try disabling \"Instant Preview\" as a workaround.";
+		}
+		ERR_FAIL_MSG(err_msg);
+	}
+
 	item_selected_callback.call(container->get_selected());
 }
 
@@ -277,7 +299,6 @@ void EditorQuickOpenDialog::_search_box_text_changed(const String &p_query) {
 void style_button(Button *p_button) {
 	p_button->set_flat(true);
 	p_button->set_focus_mode(Control::FOCUS_ACCESSIBILITY);
-	p_button->set_default_cursor_shape(Control::CURSOR_POINTING_HAND);
 }
 
 QuickOpenResultContainer::QuickOpenResultContainer() {
@@ -307,11 +328,16 @@ QuickOpenResultContainer::QuickOpenResultContainer() {
 		}
 
 		{
+			MarginContainer *mc = memnew(MarginContainer);
+			mc->set_theme_type_variation("NoBorderHorizontalWindow");
+			mc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+			mc->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+			panel_container->add_child(mc);
+
 			// Search results
 			scroll_container = memnew(ScrollContainer);
-			scroll_container->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-			scroll_container->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 			scroll_container->set_horizontal_scroll_mode(ScrollContainer::SCROLL_MODE_DISABLED);
+			scroll_container->set_scroll_hint_mode(ScrollContainer::SCROLL_HINT_MODE_ALL);
 			scroll_container->hide();
 			panel_container->add_child(scroll_container);
 
@@ -1000,6 +1026,9 @@ void QuickOpenResultContainer::_notification(int p_what) {
 			file_details_path->add_theme_color_override(SceneStringName(font_color), text_color);
 			no_results_label->add_theme_color_override(SceneStringName(font_color), text_color);
 
+			file_context_menu->set_item_icon(FILE_SHOW_IN_FILESYSTEM, get_editor_theme_icon(SNAME("ShowInFileSystem")));
+			file_context_menu->set_item_icon(FILE_SHOW_IN_FILE_MANAGER, get_editor_theme_icon(SNAME("Filesystem")));
+
 			panel_container->add_theme_style_override(SceneStringName(panel), get_theme_stylebox(SceneStringName(panel), SNAME("Tree")));
 
 			if (content_display_mode == QuickOpenDisplayMode::LIST) {
@@ -1021,7 +1050,6 @@ void QuickOpenResultContainer::_bind_methods() {
 QuickOpenResultItem::QuickOpenResultItem() {
 	set_focus_mode(FocusMode::FOCUS_NONE);
 	_set_enabled(false);
-	set_default_cursor_shape(CURSOR_POINTING_HAND);
 
 	list_item = memnew(QuickOpenResultListItem);
 	list_item->hide();

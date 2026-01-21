@@ -9,15 +9,12 @@ class Diffusion : public RefCounted {
 
 private:
 	bool isRunning = false;
-	bool shouldUpdateLoraState = false;
 	bool enableDNNSuperres = false;
+	bool shouldRandomizeSeed = true;
 
 	int inputImageChannels = 0;
 	int inputImageWidth = 0;
 	int inputImageHeight = 0;
-	int controlImageChannels = 0;
-	int controlImageWidth = 0;
-	int controlImageHeight = 0;
 	int maskImageChannels = 0;
 	int maskImageWidth = 0;
 	int maskImageHeight = 0;
@@ -29,15 +26,13 @@ protected:
 public:
 	bool is_running();
 	void set_path(const String &modelPath);
-	void set_path_flux(const String &modelPath);
-	void set_control_path(const String &controlPath);
+	void set_path_qwen();
 	void set_param(const String &paramName_, float paramValue);
 	void set_prompt(const String &promptString);
 	void set_negative_prompt(const String &promptString);
-	void set_lora_state(const Dictionary &loraDict);
 	void set_image(const PackedByteArray &promptImage);
-	void set_control_image(const PackedByteArray &promptImage);
 	void set_mask_image(const PackedByteArray &maskImage);
+	void add_image(const PackedByteArray &promptImage);
 	int get_alloc_fail_count();
 
 	PackedByteArray start();

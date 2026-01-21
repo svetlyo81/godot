@@ -202,6 +202,27 @@ opts.Add(BoolVariable("use_volk", "Use the volk library to load the Vulkan loade
 opts.Add(BoolVariable("accesskit", "Use AccessKit C SDK", True))
 opts.Add(("accesskit_sdk_path", "Path to the AccessKit C SDK", ""))
 opts.Add(BoolVariable("sdl", "Enable the SDL3 input driver", True))
+opts.Add(
+    EnumVariable(
+        "profiler", "Specify the profiler to use", "none", ["none", "tracy", "perfetto", "instruments"], ignorecase=2
+    )
+)
+opts.Add(("profiler_path", "Path to the Profiler framework.", ""))
+opts.Add(
+    BoolVariable(
+        "profiler_sample_callstack",
+        "Profile random samples application-wide using a callstack based sampler.",
+        False,
+    )
+)
+opts.Add(
+    BoolVariable(
+        "profiler_track_memory",
+        "Profile memory allocations, if the profiler supports it.",
+        False,
+    )
+)
+
 
 # Advanced options
 opts.Add(
@@ -239,7 +260,14 @@ opts.Add(BoolVariable("disable_physics_3d", "Disable 3D physics nodes and server
 opts.Add(BoolVariable("disable_navigation_2d", "Disable 2D navigation features", False))
 opts.Add(BoolVariable("disable_navigation_3d", "Disable 3D navigation features", False))
 opts.Add(BoolVariable("disable_xr", "Disable XR nodes and server", False))
-opts.Add(BoolVariable("disable_overrides", "Disable project settings overrides and related CLI arguments", False))
+opts.Add(BoolVariable("disable_overrides", "Disable project settings overrides (override.cfg)", False))
+opts.Add(
+    BoolVariable(
+        "disable_path_overrides",
+        "Disable CLI arguments to override project path/main pack/scene and run scripts (export template only)",
+        True,
+    )
+)
 opts.Add("build_profile", "Path to a file containing a feature build profile", "")
 opts.Add("custom_modules", "A list of comma-separated directory paths containing custom modules to build.", "")
 opts.Add(BoolVariable("custom_modules_recursive", "Detect custom modules recursively for each specified path.", True))
@@ -252,6 +280,11 @@ opts.Add(
 )
 opts.Add(BoolVariable("use_precise_math_checks", "Math checks use very precise epsilon (debug option)", False))
 opts.Add(BoolVariable("strict_checks", "Enforce stricter checks (debug option)", False))
+opts.Add(
+    BoolVariable(
+        "limit_transitive_includes", "Attempt to limit the amount of transitive includes in system headers", True
+    )
+)
 opts.Add(BoolVariable("scu_build", "Use single compilation unit build", False))
 opts.Add("scu_limit", "Max includes per SCU file when using scu_build (determines RAM use)", "0")
 opts.Add(BoolVariable("engine_update_check", "Enable engine update checks in the Project Manager", True))
@@ -500,7 +533,7 @@ if env["optimize"] == "auto":
         opt_level = "speed_trace"
     else:  # Release
         opt_level = "speed"
-    env["optimize"] = ARGUMENTS.get("optimize", opt_level)
+    env["optimize"] = opt_level
 
 env["debug_symbols"] = methods.get_cmdline_bool("debug_symbols", env.dev_build)
 
@@ -763,6 +796,13 @@ elif methods.using_clang(env) or methods.using_emcc(env):
     if sys.platform == "win32":
         env.AppendUnique(CCFLAGS=["-fansi-escape-codes"])
 
+# Attempt to reduce transitive includes.
+if env["limit_transitive_includes"]:
+    if not env.msvc:
+        # FIXME: This define only affects `libcpp`, but lack of guaranteed, granular detection means
+        #  we're better off applying it universally.
+        env.AppendUnique(CPPDEFINES=["_LIBCPP_REMOVE_TRANSITIVE_INCLUDES"])
+
 # Set optimize and debug_symbols flags.
 # "custom" means do nothing and let users set their own optimization flags.
 # Needs to happen after configure to have `env.msvc` defined.
@@ -880,11 +920,11 @@ if env.msvc and not methods.using_clang(env):  # MSVC
     env.Append(LINKFLAGS=["modules/gdllama/llama-win/ggml.lib",
                           "modules/gdllama/llama-win/llama.lib",
                           "modules/gdllama/diffusion-win/stable-diffusion.lib",
-                          "opencv_core4130.lib",
-                          "opencv_dnn4130.lib",
-                          "opencv_dnn_superres4130.lib",
-                          "opencv_imgcodecs4130.lib",
-                          "opencv_imgproc4130.lib"])
+                          "opencv_core4140.lib",
+                          "opencv_dnn4140.lib",
+                          "opencv_dnn_superres4140.lib",
+                          "opencv_imgcodecs4140.lib",
+                          "opencv_imgproc4140.lib"])
 
     # Disable warnings which we don't plan to fix.
     disabled_warnings = [
@@ -923,7 +963,9 @@ if env.msvc and not methods.using_clang(env):  # MSVC
 else:  # GCC, Clang
     # env.Append(LINKFLAGS=['-framework', 'OpenCL'])
 
-    env.Append(LIBS=["libopencv_core4130.dll", "libopencv_dnn4130.dll", "libopencv_dnn_superres4130.dll", "libopencv_imgcodecs4130.dll", "libopencv_imgproc4130.dll"])
+    # https://github.com/opencv/opencv/commit/3c34e422093a876e63eabc2797e1de941ca9d722
+    # https://github.com/opencv/opencv_contrib/commit/d99ad2a188210cc35067c2e60076eed7c2442bc3
+    env.Append(LIBS=["libopencv_core4140.dll", "libopencv_dnn4140.dll", "libopencv_dnn_superres4140.dll", "libopencv_imgcodecs4140.dll", "libopencv_imgproc4140.dll"])
 
     env.Append(LIBPATH=["#/modules/gdllama/llama-win"])
     env.Append(LIBS=["common","ggml.dll","llama.dll"])
@@ -1051,6 +1093,9 @@ if env["brotli"]:
 
 if not env["disable_overrides"]:
     env.Append(CPPDEFINES=["OVERRIDE_ENABLED"])
+
+if env.editor_build or not env["disable_path_overrides"]:
+    env.Append(CPPDEFINES=["OVERRIDE_PATH_ENABLED"])
 
 if not env["verbose"]:
     methods.no_verbose(env)

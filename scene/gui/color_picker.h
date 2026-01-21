@@ -212,6 +212,7 @@ private:
 	Button *btn_pick = nullptr;
 	Label *palette_name = nullptr;
 	String palette_path;
+	bool presets_just_loaded = false;
 	Button *btn_preset = nullptr;
 	Button *btn_recent_preset = nullptr;
 	PopupMenu *shape_popup = nullptr;
@@ -344,6 +345,7 @@ private:
 		Ref<StyleBox> mode_button_normal;
 		Ref<StyleBox> mode_button_pressed;
 		Ref<StyleBox> mode_button_hover;
+		Ref<StyleBox> mode_button_hover_pressed;
 	} theme_cache;
 
 	void _copy_normalized_to_hsv_okhsl();
@@ -514,6 +516,7 @@ class ColorPickerButton : public Button {
 	Color color;
 	bool edit_alpha = true;
 	bool edit_intensity = true;
+	bool popup_was_open = false;
 
 	struct ThemeCache {
 		Ref<StyleBox> normal_style;
@@ -533,6 +536,7 @@ class ColorPickerButton : public Button {
 protected:
 	void _notification(int);
 	static void _bind_methods();
+	virtual void gui_input(const Ref<InputEvent> &p_event) override;
 
 public:
 	void set_pick_color(const Color &p_color);
