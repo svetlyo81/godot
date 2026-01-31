@@ -27,6 +27,7 @@ public:
 	bool is_running();
 	void set_path(const String &modelPath);
 	void set_path_qwen();
+	void set_path_klein(const String &modelPath);
 	void set_param(const String &paramName_, float paramValue);
 	void set_prompt(const String &promptString);
 	void set_negative_prompt(const String &promptString);

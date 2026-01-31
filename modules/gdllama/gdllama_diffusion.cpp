@@ -194,7 +194,7 @@ struct SDContextParams {
 	std::string photo_maker_path;
 	sd_type_t wtype = SD_TYPE_COUNT;
 	std::string tensor_type_rules;
-	std::string lora_model_dir;
+	std::string lora_model_dir = ".";
 
 	std::map<std::string, std::string> embedding_map;
 	std::vector<sd_embedding_t> embedding_vec;
@@ -202,6 +202,7 @@ struct SDContextParams {
 	rng_type_t rng_type = CUDA_RNG;
 	rng_type_t sampler_rng_type = RNG_TYPE_COUNT;
 	bool offload_params_to_cpu = false;
+	bool enable_mmap = false;
 	bool control_net_cpu = false;
 	bool clip_on_cpu = false;
 	bool vae_on_cpu = false;
@@ -268,6 +269,7 @@ struct SDContextParams {
 			<< "  sampler_rng_type: " << sd_rng_type_name(sampler_rng_type) << ",\n"
 			<< "  flow_shift: " << (std::isinf(flow_shift) ? "INF" : std::to_string(flow_shift)) << "\n"
 			<< "  offload_params_to_cpu: " << (offload_params_to_cpu ? "true" : "false") << ",\n"
+			<< "  enable_mmap: " << (enable_mmap ? "true" : "false") << ",\n"
 			<< "  control_net_cpu: " << (control_net_cpu ? "true" : "false") << ",\n"
 			<< "  clip_on_cpu: " << (clip_on_cpu ? "true" : "false") << ",\n"
 			<< "  vae_on_cpu: " << (vae_on_cpu ? "true" : "false") << ",\n"
@@ -331,6 +333,7 @@ struct SDContextParams {
 			prediction,
 			lora_apply_mode,
 			offload_params_to_cpu,
+			enable_mmap,
 			clip_on_cpu,
 			control_net_cpu,
 			vae_on_cpu,
@@ -357,8 +360,8 @@ struct SDGenerationParams {
 	std::string prompt_with_lora; // for metadata record only
 	std::string negative_prompt;
 	int clip_skip = -1; // <= 0 represents unspecified
-	int width = 512;
-	int height = 512;
+	int width = -1;
+	int height = -1;
 	int batch_count = 1;
 	std::string input_image_path;
 	std::string end_image_path;
@@ -688,6 +691,7 @@ void Diffusion::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_running"), &Diffusion::is_running);
 	ClassDB::bind_method(D_METHOD("set_path", "value"), &Diffusion::set_path, DEFVAL(""));
 	ClassDB::bind_method(D_METHOD("set_path_qwen"), &Diffusion::set_path_qwen);
+	ClassDB::bind_method(D_METHOD("set_path_klein", "value"), &Diffusion::set_path_klein, DEFVAL(""));
 	ClassDB::bind_method(D_METHOD("set_param", "value", "value"), &Diffusion::set_param, DEFVAL(""), DEFVAL(1.0f));
 	ClassDB::bind_method(D_METHOD("set_prompt", "value"), &Diffusion::set_prompt, DEFVAL(""));
 	ClassDB::bind_method(D_METHOD("set_negative_prompt", "value"), &Diffusion::set_negative_prompt, DEFVAL(""));
@@ -715,10 +719,21 @@ void Diffusion::set_path(const String &modelPath) {
 }
 void Diffusion::set_path_qwen() {
 	ctx_params.model_path = "";
-	ctx_params.diffusion_model_path = "qwen-image-edit-2511.gguf";
-	ctx_params.vae_path = "qwen_image_vae.safetensors";
-	ctx_params.llm_path = "Qwen2.5-VL-7B-Instruct.Q8_0.gguf";
+	ctx_params.diffusion_model_path = "models/qwen-image-edit-2511.gguf";
+	ctx_params.vae_path = "models/qwen_image_vae.safetensors";
+	ctx_params.llm_path = "models/Qwen2.5-VL-7B-Instruct.Q8_0.gguf";
 	ctx_params.qwen_image_zero_cond_t = true;
+	ctx_params.offload_params_to_cpu = true;
+	ctx_params.ggml_mxfp4 = false;
+	gen_params.sample_params.sample_method = EULER_SAMPLE_METHOD;
+	ctx_params.vae_tiling_params.enabled = false;
+}
+void Diffusion::set_path_klein(const String &modelPath) {
+	ctx_params.model_path = "";
+	ctx_params.diffusion_model_path = std::string(modelPath.utf8().get_data());
+	ctx_params.vae_path = "models/flux2-vae.safetensors";
+	ctx_params.llm_path = "models/Qwen3-4B-Q8_0.gguf";
+	ctx_params.qwen_image_zero_cond_t = false;
 	ctx_params.offload_params_to_cpu = true;
 	ctx_params.ggml_mxfp4 = false;
 	gen_params.sample_params.sample_method = EULER_SAMPLE_METHOD;

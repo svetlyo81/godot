@@ -152,10 +152,10 @@ void Llama::set_should_use_gpu(bool _shouldUseGPU) {
 	shouldUseGPU = _shouldUseGPU;
 }
 bool Llama::set_gpu_free_mem(int _gpuFreeMem) {
-	if (gpuTotalMem > _gpuFreeMem - 100) {
-		gpuFreeMem = _gpuFreeMem;
-		return true;
-	} else return false;
+	gpuFreeMem = _gpuFreeMem;
+
+	if (gpuTotalMem > _gpuFreeMem - 100) return true;
+	else return false;
 }
 void Llama::set_gpu_layer_mem(int _gpuLayerMem) {
 	gpuLayerMem = _gpuLayerMem;
