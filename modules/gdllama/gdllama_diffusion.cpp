@@ -721,7 +721,7 @@ void Diffusion::set_path_qwen() {
 	ctx_params.model_path = "";
 	ctx_params.diffusion_model_path = "models/qwen-image-edit-2511.gguf";
 	ctx_params.vae_path = "models/qwen_image_vae.safetensors";
-	ctx_params.llm_path = "models/Qwen2.5-VL-7B-Instruct.Q8_0.gguf";
+	ctx_params.llm_path = "models/qwen_2.5_vl_7b.safetensors";
 	ctx_params.qwen_image_zero_cond_t = true;
 	ctx_params.offload_params_to_cpu = true;
 	ctx_params.ggml_mxfp4 = false;
